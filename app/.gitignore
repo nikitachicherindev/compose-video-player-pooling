@@ -1,0 +1,41 @@
+# Built application files
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# Keystore files
+*.jks
+*.keystore
+
+# Log files
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Kotlin
+.kotlin/
+
+# Caches
+.externalNativeBuild/
+.cxx/
+
+# Compose preview & tooling
+/.compose/
