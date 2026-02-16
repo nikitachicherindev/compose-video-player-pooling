@@ -147,14 +147,24 @@ Useful tags:
 - `VideoPreviewCache` — cache creation/release
 - `VideoPreviewFactories` — factory creation (and shared cache usage)
 
-### Why `PlayerSurface` uses SURFACE_TYPE_TEXTURE_VIEW
+### Crossfading previews while using `SURFACE_TYPE_SURFACE_VIEW`
 
-Compose’s `Modifier.alpha(...)` animates the composable, but if `PlayerSurface` uses a
-`SurfaceView` internally (and it does that by default), alpha/clip effects often **won’t work as
-expected** because `SurfaceView` renders in a separate surface layer.
+`PlayerSurface` uses a `SurfaceView` by default (`SURFACE_TYPE_SURFACE_VIEW`). A `SurfaceView` is
+rendered in a separate surface layer, which means some Compose effects applied *to the video layer*
+(e.g. `Modifier.alpha(...)`, shape clipping, certain transforms) may not behave like normal UI.
 
-To make crossfades reliable, this demo switches to SURFACE_TYPE_TEXTURE_VIEW so PlayerSurface uses
-a **TextureView** internally.
+Instead of animating the video itself, this demo keeps the video surface **always present** and
+animates a normal Compose **placeholder overlay** that sits *above* the video:
+
+- `PlayerSurface(surfaceType = SURFACE_TYPE_SURFACE_VIEW)` is always in the tree
+- a full-size placeholder `Box` (with a solid background + text) is drawn on top
+- once `VideoController` reports `videoHasFirstFrame = true`, we animate the placeholder’s alpha
+  from `1f → 0f`
+
+This gives a reliable “crossfade” effect while still benefiting from `SurfaceView` performance
+characteristics. Keep in mind that the overlay should be **opaque** (background + content) while
+visible, so it fully
+hides black frames or previous content before the first frame renders.
 
 ## Known limitations (intentionally left “demo-simple”)
 
@@ -191,8 +201,9 @@ No license granted, this repository is intended as a minimal educational demo.
   player from a controller `finally` block.
 - **Compose identity matters.** Use stable `key = { item.id }` in `LazyRow` so "who owns a player"
   maps to stable item identity.
-- **TextureView is a tradeoff.** We force `PlayerSurface` to use `TextureView` so alpha/crossfades
-  behave like normal UI. This can cost more memory and isn't always suitable for DRM/secure output.
+- **SurfaceView vs TextureView.** This demo uses `SurfaceView` and fades a Compose overlay instead
+  of animating the video layer. `TextureView` behaves more like normal UI (alpha/clipping), but can
+  cost more memory and isn’t always suitable for DRM/secure output.
 - **Audio is actually disabled.** The preview player disables the audio renderer via the track
   selector (`setRendererDisabled(C.TRACK_TYPE_AUDIO, true)`), not just muting.
 - **Cold start still exists.** Pooling helps during scroll, but the first time the pool is cold

@@ -22,12 +22,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.ui.compose.PlayerSurface
-import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import kotlinx.collections.immutable.ImmutableList
 
 private const val TAG = "VideoContainer"
@@ -85,12 +86,12 @@ internal fun VideoContainer(
     }
 
     val targetAlpha =
-        if (controller.layer == Layer.VIDEO && controller.videoHasFirstFrame) 1f else 0f
+        if (controller.layer == Layer.VIDEO && controller.videoHasFirstFrame) 0f else 1f
 
-    val videoAlpha by animateFloatAsState(
+    val placeholderAlpha by animateFloatAsState(
         targetValue = targetAlpha,
         animationSpec = tween(durationMillis = ANIM_MS.toInt(), easing = FastOutSlowInEasing),
-        label = "videoAlpha"
+        label = "placeholderAlpha"
     )
 
     val shape = RoundedCornerShape(16.dp)
@@ -102,23 +103,28 @@ internal fun VideoContainer(
             .background(colors.surface, shape)
             .border(1.dp, colors.outline, shape)
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        // Video always present (no alpha animation on this)
+        PlayerSurface(
+            modifier = Modifier.fillMaxSize(),
+            player = controller.player,
+            surfaceType = SURFACE_TYPE_SURFACE_VIEW
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(placeholderAlpha)
+                .background(colors.surface)
+        ) {
             Text(
                 text = text,
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.Center)
                     .padding(horizontal = 16.dp),
-                color = colors.onSurface,
+                textAlign = TextAlign.Center,
+                color = colors.onSurface
             )
         }
-
-        PlayerSurface(
-            modifier = modifier
-                .fillMaxSize()
-                .alpha(videoAlpha),
-            player = controller.player,
-            surfaceType = SURFACE_TYPE_TEXTURE_VIEW
-        )
     }
 }
