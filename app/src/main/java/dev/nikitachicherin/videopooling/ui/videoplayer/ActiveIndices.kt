@@ -77,9 +77,13 @@ fun rememberActiveIndicesForVideo(
                 // Else: this item is farther than our current top-K -> ignore.
             }
 
-            // Return the chosen indices.
+            // Return the chosen indices without creating intermediate map/list objects.
             // Note: Set order doesn't matter; the caller treats this as membership ("active or not").
-            best.map { it.second }.toSet()
+            val chosen = HashSet<Int>(best.size)
+            for ((_, index) in best) {
+                chosen.add(index)
+            }
+            chosen
         }
     }.value
 }
