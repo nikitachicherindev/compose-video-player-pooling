@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.C
@@ -14,8 +15,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import dev.nikitachicherin.videopooling.exoplayer.VideoPreviewCache
 import dev.nikitachicherin.videopooling.exoplayer.VideoPreviewMedia3Factories
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlin.coroutines.cancellation.CancellationException
 
 private const val TAG = "ExoPlayerPool"
@@ -180,6 +183,25 @@ internal class ExoPlayerPool(
     }
 
     /**
+     * Pre-creates players gradually so the first active tile does not pay full initialization cost.
+     * Runs on main because player creation and pool mutations are main-thread confined.
+     */
+    suspend fun prewarm(targetCount: Int = maxSize, stepDelayMs: Long = 120L) {
+        checkMainThread()
+        if (disposed) return
+
+        val target = targetCount.coerceIn(0, maxSize)
+        while (!disposed && totalCreated < target) {
+            val created = createPlayer(appContext)
+            totalCreated++
+            available.addLast(created)
+            signal.trySend(Unit)
+
+            if (stepDelayMs > 0L) delay(stepDelayMs)
+        }
+    }
+
+    /**
      * Disposes the pool.
      *
      * Important subtlety:
@@ -269,11 +291,16 @@ fun buildPreviewPlayer(context: Context): ExoPlayer {
  * - the pool is tied to composition
  * - when the composable leaves composition, [ExoPlayerPool.releaseAll] runs
  */
+@OptIn(UnstableApi::class)
 @Composable
 internal fun rememberExoPlayerPool(maxSize: Int): ExoPlayerPool {
     val appContext = LocalContext.current.applicationContext
     val pool = remember(maxSize) {
         ExoPlayerPool(appContext, maxSize) { ctx -> buildPreviewPlayer(ctx) }
+    }
+    LaunchedEffect(pool, appContext) {
+        VideoPreviewCache.warmUp(appContext)
+        pool.prewarm(targetCount = maxSize)
     }
     DisposableEffect(pool) { onDispose { pool.releaseAll() } }
     return pool

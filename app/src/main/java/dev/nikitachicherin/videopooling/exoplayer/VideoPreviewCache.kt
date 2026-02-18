@@ -8,6 +8,8 @@ import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 private const val TAG = "VideoPreviewCache"
@@ -72,5 +74,15 @@ internal object VideoPreviewCache {
         )
 
         return SimpleCache(cacheDir, evictor, dbProvider).also { cache = it }
+    }
+
+    /**
+     * Pre-initializes the cache on a background dispatcher to avoid paying the setup cost
+     * in a first-visible playback path.
+     */
+    suspend fun warmUp(context: Context) {
+        withContext(Dispatchers.IO) {
+            get(context.applicationContext)
+        }
     }
 }
