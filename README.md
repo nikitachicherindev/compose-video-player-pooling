@@ -42,6 +42,13 @@ Treat `ExoPlayer` instances as **reusable resources**:
 
 This way, scrolling mostly reuses already-initialized `ExoPlayer`s instead of re-creating them.
 
+Additionally, this demo:
+
+- pre-warms the shared Media3 disk cache off the UI thread
+- pre-creates pooled players gradually on first composition
+- creates `PlayerSurface` only for active (or currently attached) tiles
+- avoids an intermediate allocation in active-index selection (`HashSet` fill vs `map(...).toSet()`)
+
 ## What to read in the code
 
 Start here (in recommended order):
@@ -92,6 +99,7 @@ Start here (in recommended order):
 - `acquireOrWait()` suspends if pool is exhausted until someone returns a player
 - `release()` stops playback, clears media items, detaches the surface, and returns the player to
   the queue
+- `prewarm()` can gradually create up to `maxSize` players ahead of first demand
 
 ### 3) Per-tile playback loop
 
@@ -135,6 +143,14 @@ These are the main “feel vs. resource usage” controls:
 
 - `exoplayer/VideoPreviewCache.kt`
     - `CACHE_MAX_BYTES` (preview cache size cap)
+    - `warmUp(context)` initializes `SimpleCache` on `Dispatchers.IO`
+
+### Warmup path
+
+- `ui/videoplayer/ExoPlayerPool.kt` → `rememberExoPlayerPool()`
+    - runs one warmup effect:
+    - `VideoPreviewCache.warmUp(appContext)` (cache bootstrap off main thread)
+    - `pool.prewarm(targetCount = maxSize)` (gradual player pre-creation)
 
 ## Logging
 
@@ -153,10 +169,11 @@ Useful tags:
 rendered in a separate surface layer, which means some Compose effects applied *to the video layer*
 (e.g. `Modifier.alpha(...)`, shape clipping, certain transforms) may not behave like normal UI.
 
-Instead of animating the video itself, this demo keeps the video surface **always present** and
-animates a normal Compose **placeholder overlay** that sits *above* the video:
+Instead of animating the video itself, this demo animates a normal Compose **placeholder overlay**
+that sits *above* the video:
 
-- `PlayerSurface(surfaceType = SURFACE_TYPE_SURFACE_VIEW)` is always in the tree
+- `PlayerSurface(surfaceType = SURFACE_TYPE_SURFACE_VIEW)` is created only when
+  `isActive || controller.player != null`
 - a full-size placeholder `Box` (with a solid background + text) is drawn on top
 - once `VideoController` reports `videoHasFirstFrame = true`, we animate the placeholder’s alpha
   from `1f → 0f`
@@ -171,11 +188,13 @@ hides black frames or previous content before the first frame renders.
 This is a demo, so some production concerns are intentionally not addressed:
 
 - No ViewModel / paging / lifecycle-aware UI state (kept local for clarity).
-- No prefetching strategy (e.g. warming a player before it becomes active).
+- Warmup is intentionally simple (single startup effect). It does not yet include scroll-aware
+  predictive prefetching.
 - No “snap-to-page” behavior; active item selection is closest-to-center and may flicker at
   boundaries.
 - Error handling is minimal; a broken URL just results in a failed slot and retry on next loop.
-- One `PlayerSurface` per tile (fine for a demo; real feeds might optimize view reuse further).
+- `PlayerSurface` only instantiated for active/attached tiles; this reduces inactive surface
+  overhead but does not implement advanced surface reuse strategies.
 - Audio renderer is disabled via track selector, but the audio renderer is still instantiated (for a
   truly minimal player, you’d customize the renderers factory).
 - The pool does not shrink while the screen is alive (by design to avoid churn).
