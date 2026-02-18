@@ -103,12 +103,15 @@ internal fun VideoContainer(
             .background(colors.surface, shape)
             .border(1.dp, colors.outline, shape)
     ) {
-        // Video always present (no alpha animation on this)
-        PlayerSurface(
-            modifier = Modifier.fillMaxSize(),
-            player = controller.player,
-            surfaceType = SURFACE_TYPE_SURFACE_VIEW
-        )
+        // Create the video surface only for active (or currently attached) tiles to
+        // avoid keeping unnecessary SurfaceViews in long lists.
+        if (isActive || controller.player != null) {
+            PlayerSurface(
+                modifier = Modifier.fillMaxSize(),
+                player = controller.player,
+                surfaceType = SURFACE_TYPE_SURFACE_VIEW
+            )
+        }
 
         Box(
             modifier = Modifier
